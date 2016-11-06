@@ -41,10 +41,10 @@ def create_fields_file(fields_file_path, input_file_path):
             f.update(zip(ps_keys,[True]*len(ps_keys)))
         json.dump(f,fields_file_path,indent=0)
 
-def json_to_csv(input_file_path, output_file_path, fields_file_path):
+def json_to_csv(input_file_path, output_file_path, fields_dict):
     global allowedFields
     #json = input_file.read()
-    fields_dict=json.load(fields_file_path, object_pairs_hook=OrderedDict)
+
     allowedFields = [k for k,v in fields_dict.items() if v==True]
     headers_written=False
 
@@ -118,15 +118,28 @@ def dicts_to_csv(source, output_file):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument("-f", "--fields",type=argparse.FileType('a+'),help="Field list file for output")
+    parser.add_argument("-f", "--fields",type=argparse.FileType('a+'),default='fields.json',help="Field list file for output. If not given, a fields.json file will be created allowing all fields.")
+    parser.add_argument("-o", "--output",type=argparse.FileType('w'), help="Destination file. To generate a fields.json only, leave blank.")
     parser.add_argument("JSON_FILE_PATH",type=argparse.FileType('r'), help="JSON log file to parse")
-    parser.add_argument("-o", "--output",type=argparse.FileType('w'), help="Destination file.  If not given, a new fields file is created.")
     args=parser.parse_args()
 
     if args.output==None:
         create_fields_file(args.fields, args.JSON_FILE_PATH)
     else:
-        json_to_csv(args.JSON_FILE_PATH, args.output, args.fields)
+        try:
+            fields_dict=json.load(args.fields, object_pairs_hook=OrderedDict)
+            json_to_csv(args.JSON_FILE_PATH, args.output, fields_dict)
+        except ValueError:  #Fields file is empty, invalid, or did not exist
+            i=raw_input("Invalid fields file specified. Create default fields.json to continue (Y/N)? ")
+            if i.upper()=='Y':
+                args.fields.truncate()
+                create_fields_file(args.fields, args.JSON_FILE_PATH)
+                #files must be reopened since they are closed after the with statement in create_fields_file
+                fields_dict=json.load(open(args.fields.name), object_pairs_hook=OrderedDict)
+                json_to_csv(open(args.JSON_FILE_PATH.name), args.output, fields_dict)
+            else:
+                quit()
+
 
     #    json_to_csv(args[1], args[2])
     #    print 'Finished'
